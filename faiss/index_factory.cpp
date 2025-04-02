@@ -445,6 +445,7 @@ IndexHNSW* parse_IndexHNSW(
         int d,
         MetricType mt,
         int hnsw_M) {
+    printf("In HNSW\n");
     std::smatch sm;
     auto match = [&sm, &code_string](const std::string& pattern) {
         return re_match(code_string, pattern, sm);

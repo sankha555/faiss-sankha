@@ -164,6 +164,7 @@ struct GenericDistanceComputer : DistanceComputer {
     }
 
     void set_query(const float* x) override {
+        printf("Vaishnavi13\n");
         q = x;
     }
 };

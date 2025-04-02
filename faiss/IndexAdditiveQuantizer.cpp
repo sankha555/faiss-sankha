@@ -55,6 +55,7 @@ struct AQDistanceComputerDecompress : FlatCodesDistanceComputer {
 
     const float* q;
     void set_query(const float* x) final {
+        printf("Vaishnavi10\n");
         q = x;
     }
 
@@ -86,6 +87,7 @@ struct AQDistanceComputerLUT : FlatCodesDistanceComputer {
 
     float bias;
     void set_query(const float* x) final {
+        printf("Vaishnavi11\n");
         // this is quite sub-optimal for multiple queries
         aq.compute_LUT(1, x, LUT.data());
         if (is_IP) {

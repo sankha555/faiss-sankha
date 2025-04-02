@@ -261,7 +261,7 @@ void hnsw_search(
 
 #pragma omp parallel if (i1 - i0 > 1)
         {
-            VisitedTable vt(index->ntotal);
+            VisitedTable vt(index->ntotal);                                 // V represented as bitvector
             typename BlockResultHandler::SingleResultHandler res(bres);
 
             std::unique_ptr<DistanceComputer> dis(
@@ -270,10 +270,10 @@ void hnsw_search(
 #pragma omp for reduction(+ : n1, n2, ndis, nhops) schedule(guided)
             for (idx_t i = i0; i < i1; i++) {
                 res.begin(i);
-                dis->set_query(x + i * index->d);
+                dis->set_query(x + i * index->d);       // i-th search query
 
-                HNSWStats stats = hnsw.search(*dis, res, vt, params);
-                n1 += stats.n1;
+                HNSWStats stats = hnsw.search(*dis, res, vt, params);   // Search logic for one query
+                n1 += stats.n1; 
                 n2 += stats.n2;
                 ndis += stats.ndis;
                 nhops += stats.nhops;
@@ -289,11 +289,11 @@ void hnsw_search(
 } // anonymous namespace
 
 void IndexHNSW::search(
-        idx_t n,
-        const float* x,
-        idx_t k,
-        float* distances,
-        idx_t* labels,
+        idx_t n,                // no. of queries
+        const float* x,         // queries
+        idx_t k,                // get k nearest results
+        float* distances,       // empty distances vectors
+        idx_t* labels,          // empty labels vectors
         const SearchParameters* params) const {
     FAISS_THROW_IF_NOT(k > 0);
 
@@ -614,6 +614,7 @@ void IndexHNSW::permute_entries(const idx_t* perm) {
 }
 
 DistanceComputer* IndexHNSW::get_distance_computer() const {
+    // printf("IndexHNSW 617\n");
     return storage->get_distance_computer();
 }
 

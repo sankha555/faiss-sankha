@@ -124,6 +124,7 @@ struct FlatL2Dis : FlatCodesDistanceComputer {
               ndis(0) {}
 
     void set_query(const float* x) override {
+        printf("Normal HNSW query\n");
         q = x;
     }
 
@@ -188,6 +189,7 @@ struct FlatIPDis : FlatCodesDistanceComputer {
               ndis(0) {}
 
     void set_query(const float* x) override {
+        printf("Vaishnavi7\n");
         q = x;
     }
 
@@ -310,6 +312,7 @@ struct FlatL2WithNormsDis : FlatCodesDistanceComputer {
               query_l2norm(0) {}
 
     void set_query(const float* x) override {
+        printf("Vaishnavi8\n");
         q = x;
         query_l2norm = fvec_norm_L2sqr(q, d);
     }

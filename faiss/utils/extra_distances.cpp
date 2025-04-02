@@ -124,6 +124,7 @@ struct ExtraDistanceComputer : FlatCodesDistanceComputer {
               b(xb) {}
 
     void set_query(const float* x) override {
+        printf("Vaishnavi2\n");
         q = x;
     }
 };

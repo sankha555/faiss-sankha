@@ -139,6 +139,7 @@ struct GenericFlatCodesDistanceComputer : FlatCodesDistanceComputer {
               vec_buffer(codec->d * 4) {}
 
     void set_query(const float* x) override {
+        printf("Vaishnavi5\n");
         query = x;
     }
 

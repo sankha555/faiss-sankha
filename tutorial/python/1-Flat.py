@@ -15,6 +15,7 @@ xq = np.random.random((nq, d)).astype('float32')
 xq[:, 0] += np.arange(nq) / 1000.
 
 import faiss                   # make faiss available
+print(faiss.__file__)
 index = faiss.IndexFlatL2(d)   # build the index
 print(index.is_trained)
 index.add(xb)                  # add vectors to the index

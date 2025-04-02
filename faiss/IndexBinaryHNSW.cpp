@@ -270,6 +270,7 @@ struct FlatHammingDis : DistanceComputer {
     // NOTE: Pointers are cast from float in order to reuse the floating-point
     //   DistanceComputer.
     void set_query(const float* x) override {
+        printf("Vaishnavi9\n");
         hc.set((uint8_t*)x, code_size);
     }
 

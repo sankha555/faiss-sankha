@@ -1686,6 +1686,7 @@ struct DistanceComputerByte<Similarity, 1> : SQDistanceComputer {
     }
 
     void set_query(const float* x) final {
+        printf("Vaishnavi\n");
         for (int i = 0; i < d; i++) {
             tmp[i] = int(x[i]);
         }

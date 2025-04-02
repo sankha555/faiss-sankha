@@ -197,4 +197,4 @@ struct IndexHNSWCagra : IndexHNSW {
             const SearchParameters* params = nullptr) const override;
 };
 
-} // namespace faiss
+}

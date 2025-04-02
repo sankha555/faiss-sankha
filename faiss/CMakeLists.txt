@@ -95,6 +95,7 @@ set(FAISS_SRC
   utils/distances_fused/avx512.cpp
   utils/distances_fused/distances_fused.cpp
   utils/distances_fused/simdlib_based.cpp
+  IndexCompass.cpp
 )
 
 set(FAISS_HEADERS
@@ -231,6 +232,7 @@ set(FAISS_HEADERS
   utils/hamming_distance/neon-inl.h
   utils/hamming_distance/avx2-inl.h
   utils/hamming_distance/avx512-inl.h
+  IndexCompass.h
 )
 
 if(NOT WIN32)

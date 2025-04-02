@@ -306,6 +306,7 @@ struct PreTransformDistanceComputer : DistanceComputer {
             : index(index), sub_dc(index->index->get_distance_computer()) {}
 
     void set_query(const float* x) override {
+        printf("Vaishnavi4\n");
         const float* xt = index->apply_chain(1, x);
         if (xt == x) {
             sub_dc->set_query(x);

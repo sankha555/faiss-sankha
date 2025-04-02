@@ -124,6 +124,7 @@ struct PQDistanceComputer : FlatCodesDistanceComputer {
     }
 
     void set_query(const float* x) override {
+        printf("pq distance computer query\n");
         if (metric == METRIC_L2) {
             pq.compute_distance_table(x, precomputed_table.data());
         } else {

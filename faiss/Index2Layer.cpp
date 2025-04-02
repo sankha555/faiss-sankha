@@ -158,6 +158,7 @@ struct Distance2Level : DistanceComputer {
     }
 
     void set_query(const float* x) override {
+        printf("Vaishnavi12\n");
         q = x;
     }
 };
