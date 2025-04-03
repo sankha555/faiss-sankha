@@ -8,6 +8,7 @@
 #include <faiss/impl/HNSW.h>
 
 #include <cstddef>
+#include <map>
 
 #include <faiss/impl/AuxIndexStructures.h>
 #include <faiss/impl/DistanceComputer.h>
@@ -759,29 +760,24 @@ int search_from_candidates(
     return nres;
 }
 
-std::string msg(int v1, int v2){
-    return std::to_string(v1) + " xxx " + std::to_string(v2) + "\n";
-}
-
-void search_with_compass_modifications_2(
+int search_from_candidates(
     const HNSW& hnsw,
-    const HNSW& hnsw_pq,
     DistanceComputer& qdis,
-    DistanceComputer& hnswpq_dis,
-    DistanceComputer& pq_dis,
+    DistanceComputer& pqdis,
     ResultHandler<C>& res,
     MinimaxHeap& candidates,
     VisitedTable& vt,
     HNSWStats& stats,   
     int level,                          // Search in level 0 (typically)
-    const SearchParameters* params,
-    int efn,
-    int efspec
-){
+    int nres_in,                        
+    const SearchParameters* params) {
+
+    int nres = nres_in;                     // kind of useless
+    int ndis = 0;                           // tracks the number of distance computations made
+
     // can be overridden by search params
     bool do_dis_check = hnsw.check_relative_distance;
     int efSearch = hnsw.efSearch;
-
     const IDSelector* sel = nullptr;
     if (params) {
         if (const SearchParametersHNSW* hnsw_params =
@@ -807,6 +803,181 @@ void search_with_compass_modifications_2(
         vt.set(v1);
     }
 
+    int nstep = 0;                              // tracks the total hops made in the query
+
+    int h = -1;
+    while (candidates.size() > 0) {
+        h++;
+        std::map<int, float> final_dists;
+
+        float d0 = 0;
+        // Extract nearest neighbour from C to q
+        int v0 = candidates.pop_min(&d0);       // min. distance in d0, node index in v0
+
+        if (do_dis_check) {
+            // tricky stopping condition: there are more that ef
+            // distances that are processed already that are smaller
+            // than d0
+
+            int n_dis_below = candidates.count_below(d0);
+            if (n_dis_below >= efSearch) {
+                break;
+            }
+        }
+
+        size_t begin, end;
+        hnsw.neighbor_range(v0, level, &begin, &end);       // set of neighbours of v0 at current level
+
+        // a faster version: reference version in unit test test_hnsw.cpp
+        // the following version processes 4 neighbors at a time
+        size_t jmax = begin;
+        for (size_t j = begin; j < end; j++) {
+            int v1 = hnsw.neighbors[j];
+            if (v1 < 0)
+                break;
+
+            prefetch_L2(vt.visited.data() + v1);            // store the vector embeddings of the neighbor v1
+            jmax += 1;
+        }
+
+        int counter = 0;
+        size_t saved_j[4];
+
+        threshold = res.threshold;                          // distance of furthest element from q
+
+        auto add_to_heap = [&](const size_t idx, const float true_dis, const float pq_dis) {
+            // if(h == 0) printf("%f ", dis);
+            if (!sel || sel->is_member(idx)) {
+                if (true_dis < threshold) {                      // if distance(c, q) < distance of furthest element from q
+                    if (res.add_result(true_dis, idx)) {
+                        threshold = res.threshold;
+                        nres += 1;                      
+                    }
+                }
+            }
+
+            ////***** In Directional filtering, this step can be pruned */
+            candidates.push(idx, pq_dis);
+        };
+
+        for (size_t j = begin; j < jmax; j++) {
+            int v1 = hnsw.neighbors[j];
+
+            bool vget = vt.get(v1);     // has this neighbour been visited already?
+            vt.set(v1);
+            saved_j[counter] = v1;
+            counter += vget ? 0 : 1;    // if this neighbour has been already visited, don't increment counter
+
+            if (counter == 4) {         // fetch every 4 neighbours together (efficiency?)
+                float pq_dis[4], true_dis[4];
+                pqdis.distances_batch_4(
+                        saved_j[0],
+                        saved_j[1],
+                        saved_j[2],
+                        saved_j[3],
+                        pq_dis[0],
+                        pq_dis[1],
+                        pq_dis[2],
+                        pq_dis[3]);
+
+                qdis.distances_batch_4(
+                    saved_j[0],
+                    saved_j[1],
+                    saved_j[2],
+                    saved_j[3],
+                    true_dis[0],
+                    true_dis[1],
+                    true_dis[2],
+                    true_dis[3]);
+
+                for (size_t id4 = 0; id4 < 4; id4++) {
+                    add_to_heap(saved_j[id4], true_dis[id4], pq_dis[id4]);
+                }
+
+                ndis += 4;
+
+                counter = 0;
+            }
+        }
+
+        for (size_t icnt = 0; icnt < counter; icnt++) {
+            float pq_dis = pqdis(saved_j[icnt]);
+            float true_dis = qdis(saved_j[icnt]);
+
+            add_to_heap(saved_j[icnt], true_dis, pq_dis);
+
+            ndis += 1;
+        }
+
+        nstep++;                                    // nstep incremented only after "expanding" a node
+        if (!do_dis_check && nstep > efSearch) {
+            break;
+        }
+    }
+
+    if(print_stats){
+        printf("Distance Computations: %d\n", ndis);
+        printf("Hops: %d\n", nstep++);
+    }
+
+
+    if (level == 0) {
+        stats.n1++;
+        if (candidates.size() == 0) {
+            stats.n2++;
+        }
+        stats.ndis += ndis;
+        stats.nhops += nstep;
+    }
+
+    return nres;
+}
+
+void search_with_compass_modifications_2(
+    const HNSW& hnsw,
+    DistanceComputer& qdis,
+    DistanceComputer& pq_dis,
+    ResultHandler<C>& res,
+    MinimaxHeap& candidates,
+    VisitedTable& vt,
+    HNSWStats& stats,   
+    int level,                          // Search in level 0 (typically)
+    const SearchParameters* params,
+    int efn,
+    int efspec
+){
+    using namespace std;
+    map<int, float> final_dists;
+    // can be overridden by search params
+    bool do_dis_check = hnsw.check_relative_distance;
+    int efSearch = hnsw.efSearch;
+
+    const IDSelector* sel = nullptr;
+    if (params) {
+        if (const SearchParametersHNSW* hnsw_params =
+                    dynamic_cast<const SearchParametersHNSW*>(params)) {
+            do_dis_check = hnsw_params->check_relative_distance;
+            efSearch = hnsw_params->efSearch;
+        }
+        sel = params->sel;
+    }
+
+    C::T threshold = res.threshold;
+    for (int i = 0; i < candidates.size(); i++) {
+        idx_t v1 = candidates.ids[i];
+        float d = candidates.dis[i];
+        // printf("v1 = %d, d = %f\n", v1, d);
+        FAISS_ASSERT(v1 >= 0);
+        if (!sel || sel->is_member(v1)) {
+            if (d < threshold) {
+                if (res.add_result(d, v1)) {
+                    threshold = res.threshold;
+                }
+            }
+        }
+        vt.set(v1);
+    }
+
 
     int nstep = 0;                              // tracks the total hops made in the query
     int ndis = 0;                               // tracks the number of distance computations made
@@ -816,14 +987,15 @@ void search_with_compass_modifications_2(
 
 
     float diff = 0;
-    for(int h = 0; h < max_hops; h++) {
+    for(int h = 0; h <= max_hops; h++) {
+        // printf("h = %d\n", h);
         float d0 = 0;
         // Extract nearest efspec nodes from C to q
         int efspec_local = std::min((int)efspec, (int)candidates.size());
 
         std::vector<int> E_1(efspec_local);         // E_1 will hold nearest efspec nodes from C to q
         for(int s = 0; s < efspec_local; s++){
-            int v0 = candidates.pop_min(&d0);      
+            int v0 = candidates.pop_min(&d0);    
             E_1[s] = v0;
         }
         
@@ -835,7 +1007,7 @@ void search_with_compass_modifications_2(
 
             int n_dis_below = candidates.count_below(d0);
             if (n_dis_below >= efSearch) {
-                print("dis check succ\n");
+                // print("dis check succ\n");
                 break;
             }
         }
@@ -844,7 +1016,6 @@ void search_with_compass_modifications_2(
         size_t begin, end;
         size_t jmax;
 
-        using namespace std;
         priority_queue<pair<float, int>, vector<pair<float, int>>, greater<pair<float, int>> > E_2;                     // E_2 will hold neighbours of speculated nodes
         for(auto v0:E_1){
             hnsw.neighbor_range(v0, level, &begin, &end);       // set of neighbours of v0 at current level
@@ -864,43 +1035,40 @@ void search_with_compass_modifications_2(
             // for each e2 in neighbourhood(e1)
             for (size_t j = begin; j < jmax; j++) {
                 int v1 = hnsw.neighbors[j];
-                int v2 = hnsw_pq.neighbors[j];
 
                 if(vt.get(v1) == 0){        // if this neighbour has not been visited before
 
                     /* THIS DISTANCE SHOULD BE COMPUTED ON COMPRESSED VECTORS */
-                    float d1 = pq_dis(v1);
-                    float d2 = hnswpq_dis(v1);
-                    float d3 = qdis(v1);
-
-                    if(p++ < 10){
-                        printf("v1 = %d, d1 = %f, d2 = %f, d3 = %f\n", v1, d1, d2, d3);                        
-                    }
-
-                    assert(d1 == d2);
-                    // printf("PQ dis = %f, HNSWPQ dis = %f, HNSW dis = %f\n", d1, d2, d3);
+                    float d_pq = pq_dis(v1);
+                    float d_full = qdis(v1);
 
                     ndis++;
 
-                    E_2.push({d1, v1});
+                    E_2.push({d_pq, v1});
                     vt.set(v1);
+
+                    final_dists[v1] = d_full;
                 }
             }
         }
         
-        auto add_to_heap = [&](const size_t idx, const float dis) {
+        auto add_to_heap = [&](const size_t idx, const float true_dis) {
             if (!sel || sel->is_member(idx)) {
-                if (res.add_result(dis, idx)) {
+                if (res.add_result(true_dis, idx)) {
                     nres += 1;                      
                 }
             }
-            candidates.push(idx, dis);
+            candidates.push(idx, true_dis);
         };
 
         int t = std::min((int)(efspec_local * efn), (int)E_2.size());
         while(t--){
             auto node = E_2.top();   E_2.pop();
-            add_to_heap(node.second, node.first);   // (node_id, dist_to_q)
+            int v = node.second;
+
+            // this is like an ORAM access
+            float true_dist = final_dists[v];
+            add_to_heap(v, true_dist);   // (node_id, dist_to_q, pq_dist_to_q)
         }
 
         nstep++;                                    // nstep incremented only after "expanding" a node
@@ -1025,7 +1193,8 @@ void search_with_compass_modifications(
 
                     /* THIS DISTANCE SHOULD BE COMPUTED ON COMPRESSED VECTORS */
                     // float d1 = pq_dis(v1);      
-                    float d1 = qdis(v1);      
+                    float d1 = qdis(v1);     
+                    float d2 = pq_dis(v1); 
 
                     // diff = (d1 > d2) ? (d1 - d2) : (d2 - d1);
                     // printf("%f === %f\n", d1, d2);
@@ -1309,7 +1478,7 @@ HNSWStats HNSW::search(
         candidates.push(nearest, d_nearest);
 
         search_from_candidates(*this, qdis, res, candidates, vt, stats, 0, 0, params);
-        // search_with_compass_modifications(*this, qdis, res, candidates, vt, stats, 0, params);
+        // search_with_compass_modifications(*this, qdis, qdis, res, candidates, vt, stats, 0, params, 12, 4);
         
     } else {
         std::priority_queue<Node> top_candidates =
@@ -1337,9 +1506,7 @@ HNSWStats HNSW::search(
 
 /* SEARCH IMPLEMENTING COMPASS COMPASS */
 HNSWStats HNSW::compass_search(
-        const HNSW& hnsw_pq,
         DistanceComputer& qdis,
-        DistanceComputer& hnswpq_dis,
         DistanceComputer& pq_dis,
         ResultHandler<C>& res,
         VisitedTable& vt,
@@ -1378,8 +1545,10 @@ HNSWStats HNSW::compass_search(
 
     candidates.push(nearest, d_nearest);
 
-    search_with_compass_modifications_2(*this, hnsw_pq, qdis, hnswpq_dis, pq_dis, res, candidates, vt, stats, 0, params, efn, efspec);
-    
+    search_with_compass_modifications_2(*this, qdis, pq_dis, res, candidates, vt, stats, 0, params, efn, efspec);
+    // search_from_candidates(*this, qdis, pq_dis, res, candidates, vt, stats, 0, 0, params);
+    // search_from_candidates(*this, qdis, res, candidates, vt, stats, 0, 0, params);
+
     vt.advance();
 
     return stats;

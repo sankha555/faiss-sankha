@@ -101,8 +101,8 @@ int main() {
     size_t efConstruction = 40;
 
 
-    bool index_in_file = true;
-    const char* index_file_path = "/mnt/sift1M_index_uncompressed.faissindex";
+    bool index_in_file = false;
+    const char* index_file_path = "./sift1M_index_HNSWFlat.faissindex";
 
     {
         printf("[%.3f s] Loading train set\n", elapsed() - t0);
@@ -122,15 +122,14 @@ int main() {
             // Create a new index from scratch
 
             if(use_compressed){
-                // index = new faiss::IndexPQ(d, q, 8, faiss::METRIC_L2);
+                index = new faiss::IndexHNSWPQ(d, q, M, 16, faiss::METRIC_L2);
+                // index->hnsw.efSearch = efSearch;
+                // index->hnsw.efConstruction = efConstruction; 
             } else {
-                // index = new faiss::IndexHNSWFlat(d, M, faiss::METRIC_L2);  
+                index = new faiss::IndexHNSWPQ(d, M, faiss::METRIC_L2); 
+                index->hnsw.efSearch = efSearch;
+                index->hnsw.efConstruction = efConstruction; 
             }
-    
-            /// Setting search hyperparameters
-            // index->hnsw.efSearch = efSearch;
-            // index->hnsw.efConstruction = efConstruction;
-            
             
             printf("[%.3f s] Training on %ld vectors\n", elapsed() - t0, nt);
             index->train(nt, xt);

@@ -16,14 +16,12 @@ namespace faiss {
         int efn = -1;
         int efspec = -1; 
 
-        IndexHNSWPQ* compressed_index;      // will be used as a helper to compute compressed distances
         IndexPQ* pq_index;
 
         IndexCompass();
 
         IndexCompass(
             IndexHNSW* hnsw_index,
-            IndexHNSWPQ* comp_index,
             IndexPQ* pq_index,
             int efn,
             int efspec,
@@ -38,6 +36,31 @@ namespace faiss {
             idx_t* labels,
             const SearchParameters* params = nullptr) const override;
     };
+
+
+    // struct IndexCompass2 : IndexHNSW, IndexPQ {
+    //     int efn = -1;
+    //     int efspec = -1;
+
+    //     IndexCompass2();
+
+    //     IndexCompass2(
+    //         IndexHNSW* hnsw_index,
+    //         IndexPQ* pq_index,
+    //         int efn,
+    //         int efspec,
+    //         MetricType metric = METRIC_L2
+    //     );
+
+    //     void search(
+    //         idx_t n,
+    //         const float* x,
+    //         idx_t k,
+    //         float* distances,
+    //         idx_t* labels,
+    //         const SearchParameters* params = nullptr
+    //     ) const override;
+    // };
 }
 
 #endif

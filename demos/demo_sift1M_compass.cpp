@@ -100,14 +100,14 @@ int main() {
 
     size_t efSearch = 32;
     size_t efConstruction = 40;
-    size_t efn = 12;
-    size_t efspec = 4;
+    size_t efn = 32;
+    size_t efspec = 1;
 
 
     bool index_in_file = true;
-    const char* index_file_path = "/mnt/sift1M_index_uncompressed.faissindex";
-    const char* comp_index_file_path = "/mnt/sift1M_index_compressed.faissindex";
-    const char* pq_index_file_path = "/mnt/sift1M_index_compressed_2.faissindex";
+    const char* index_file_path = "./sift1M_index_HNSWFlat.faissindex";
+    const char* comp_index_file_path = "./sift1M_index_HNSWPQ.faissindex";
+    const char* pq_index_file_path = "./sift1M_index_PQ.faissindex";
 
     {
         printf("[%.3f s] Loading train set\n", elapsed() - t0);
@@ -120,11 +120,10 @@ int main() {
             index_key,
             d);
 
-        faiss::IndexHNSWPQ* comp_index =  (faiss::IndexHNSWPQ*) faiss::read_index(comp_index_file_path);
+        faiss::IndexHNSWFlat* hnsw_index = (faiss::IndexHNSWFlat*) faiss::read_index(index_file_path);
         faiss::IndexPQ* pq_index =  (faiss::IndexPQ*) faiss::read_index(pq_index_file_path);
-        faiss::IndexHNSW* hnsw_index = (faiss::IndexHNSWFlat*) faiss::read_index(index_file_path);
 
-        index = new faiss::IndexCompass(hnsw_index, comp_index, pq_index, efn, efspec);
+        index = new faiss::IndexCompass(hnsw_index, pq_index, efn, efspec);
 
         delete[] xt;
     }

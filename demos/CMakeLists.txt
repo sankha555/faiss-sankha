@@ -24,6 +24,9 @@ target_link_libraries(demo_sift1M_exp PRIVATE faiss)
 add_executable(demo_sift1M_compass EXCLUDE_FROM_ALL demo_sift1M_compass.cpp)
 target_link_libraries(demo_sift1M_compass PRIVATE faiss)
 
+add_executable(demo_PQ EXCLUDE_FROM_ALL demo_PQ.cpp)
+target_link_libraries(demo_PQ PRIVATE faiss)
+
 add_executable(demo_weighted_kmeans EXCLUDE_FROM_ALL demo_weighted_kmeans.cpp)
 target_link_libraries(demo_weighted_kmeans PRIVATE faiss)
 
