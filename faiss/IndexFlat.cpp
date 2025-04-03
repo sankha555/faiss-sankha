@@ -124,7 +124,7 @@ struct FlatL2Dis : FlatCodesDistanceComputer {
               ndis(0) {}
 
     void set_query(const float* x) override {
-        printf("Normal HNSW query\n");
+        // printf("Normal HNSW query\n");
         q = x;
     }
 

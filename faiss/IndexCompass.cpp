@@ -12,12 +12,51 @@
 #include <random>
 
 #include <cstdint>
+#include <sys/stat.h>
+
 
 #include <faiss/impl/AuxIndexStructures.h>
 #include <faiss/impl/FaissAssert.h>
 #include <faiss/impl/ResultHandler.h>
 #include <faiss/utils/random.h>
 #include <faiss/utils/sorting.h>
+
+float* fvecs_read_1(const char* fname, size_t* d_out, size_t* n_out) {
+    FILE* f = fopen(fname, "r");
+    if (!f) {
+        fprintf(stderr, "could not open %s\n", fname);
+        perror("");
+        abort();
+    }
+    int d;
+    fread(&d, 1, sizeof(int), f);
+    assert((d > 0 && d < 1000000) || !"unreasonable dimension");
+    fseek(f, 0, SEEK_SET);
+    struct stat st;
+    fstat(fileno(f), &st);
+    size_t sz = st.st_size;
+    assert(sz % ((d + 1) * 4) == 0 || !"weird file size");
+    size_t n = sz / ((d + 1) * 4);
+    // n = 1;
+
+    *d_out = d;
+    *n_out = n;
+    float* x = new float[n * (d + 1)];
+    size_t nr __attribute__((unused)) = fread(x, sizeof(float), n * (d + 1), f);
+    assert(nr == n * (d + 1) || !"could not read whole file");
+
+    // shift array to remove row headers
+    for (size_t i = 0; i < n; i++)
+        memmove(x + i * d, x + 1 + i * (d + 1), d * sizeof(*x));
+
+    fclose(f);
+    return x;
+}
+
+// not very clean, but works as long as sizeof(int) == sizeof(float)
+int* ivecs_read_1(const char* fname, size_t* d_out, size_t* n_out) {
+    return (int*)fvecs_read_1(fname, d_out, n_out);
+}
 
 namespace faiss {
 
@@ -33,7 +72,6 @@ namespace faiss {
 
     IndexCompass::IndexCompass(
         IndexHNSW* hnsw_index,
-        IndexHNSWPQ* comp_index,
         IndexPQ* pq_index,
         int efn,
         int efspec,
@@ -45,14 +83,7 @@ namespace faiss {
         this->efspec = efspec;
         FAISS_ASSERT_MSG(this->efspec > 0, "efspec must be defined for Compass");
 
-        this->compressed_index = comp_index;
         this->pq_index = pq_index;
-        
-        float* x = (float*) malloc(sizeof(float));
-        this->pq_index->pq.decode(&this->pq_index->codes.at(0), x);
-        printf("x = %f\n", *x);
-
-        printf("X = %f\n", ((FlatCodesDistanceComputer*)comp_index->get_distance_computer())->codes + ((FlatCodesDistanceComputer*)hnsw_index->get_distance_computer())->code_size);
     }
 
     template <class BlockResultHandler>
@@ -90,18 +121,15 @@ namespace faiss {
                 typename BlockResultHandler::SingleResultHandler res(bres);
 
                 std::unique_ptr<DistanceComputer> dis(storage_distance_computer(index->storage));
-                DistanceComputer* hnswpq_dis = index->compressed_index->get_distance_computer();
                 DistanceComputer* pq_dis = index->pq_index->get_distance_computer();
-                // PQDistanceComputer<PQDecoder8>* pq_dis = (PQDistanceComputer<PQDecoder8>*) index->pq_index->get_distance_computer();
 
                 #pragma omp for reduction(+ : n1, n2, ndis, nhops) schedule(guided)
                 for (idx_t i = i0; i < i1; i++) {
                     res.begin(i);
                     dis->set_query(x + i * index->d);          // i-th search query SEARCH FOR: Normal HNSW query
-                    hnswpq_dis->set_query(x + i * index->d);   // i-th search query SEARCH FOR: pq distance computer query
                     pq_dis->set_query(x + i * index->d);       // i-th search query SEARCH FOR: pq distance computer query
 
-                    HNSWStats stats = hnsw.compass_search(index->compressed_index->hnsw, *dis, *hnswpq_dis, *pq_dis, res, vt, params, index->efn, index->efspec);       // Search logic for one query via Compass
+                    HNSWStats stats = hnsw.compass_search(*dis, *pq_dis, res, vt, params, index->efn, index->efspec);       // Search logic for one query via Compass
                     n1 += stats.n1; 
                     n2 += stats.n2;
                     ndis += stats.ndis;
@@ -138,6 +166,5 @@ namespace faiss {
         }
 
     }
-
 
 }

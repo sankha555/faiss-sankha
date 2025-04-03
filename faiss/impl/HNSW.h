@@ -204,9 +204,7 @@ struct HNSW {
             const SearchParameters* params = nullptr) const;
 
     HNSWStats compass_search(
-            const HNSW& hnsw_pq,
             DistanceComputer& qdis,
-            DistanceComputer& hnswpq_dis,
             DistanceComputer& pq_dis,
             ResultHandler<C>& res,
             VisitedTable& vt,
