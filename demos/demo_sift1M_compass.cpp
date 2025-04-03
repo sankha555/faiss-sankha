@@ -100,8 +100,8 @@ int main() {
 
     size_t efSearch = 32;
     size_t efConstruction = 40;
-    size_t efn = 32;
-    size_t efspec = 1;
+    size_t efn = 12;
+    size_t efspec = 4;
 
 
     bool index_in_file = true;
