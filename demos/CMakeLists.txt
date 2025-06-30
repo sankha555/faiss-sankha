@@ -32,3 +32,9 @@ target_link_libraries(demo_weighted_kmeans PRIVATE faiss)
 
 add_executable(demo_residual_quantizer EXCLUDE_FROM_ALL demo_residual_quantizer.cpp)
 target_link_libraries(demo_residual_quantizer PRIVATE faiss)
+
+add_executable(build_compass_index EXCLUDE_FROM_ALL build_compass_index.cpp)
+target_link_libraries(build_compass_index PRIVATE faiss)
+
+add_executable(build_hnsw_pq EXCLUDE_FROM_ALL build_hnsw_pq.cpp)
+target_link_libraries(build_hnsw_pq PRIVATE faiss)
